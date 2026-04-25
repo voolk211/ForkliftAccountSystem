@@ -7,6 +7,7 @@ import org.mapstruct.Mapper;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 @Mapper(componentModel = "spring")
@@ -21,7 +22,7 @@ public interface IncidentMapper {
         responseDto.setId(incident.getId());
         responseDto.setStartTime(incident.getStartTime());
 
-        LocalDateTime end = incident.getEndTime() != null ? incident.getEndTime() : LocalDateTime.now();
+        LocalDateTime end = incident.getEndTime() != null ? incident.getEndTime() : LocalDateTime.now(ZoneId.of("Europe/Minsk"));
 
         Duration duration = Duration.between(incident.getStartTime(), end);
 
