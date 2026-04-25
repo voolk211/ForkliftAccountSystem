@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>АИС ОГПА — Справочник погрузчиков</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            font-size: 13px;
+            color: #333;
+            background: #f5f5f5;
+        }
+
+        .header {
+            background: #c8102e;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 0 24px;
+        }
+        .profile-btn {
+            background: white;
+            border: none;
+            padding: 6px 18px;
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .profile-btn:hover { background: #f5f5f5; }
+        .profile-name { color: #555; margin-right: 8px; }
+
+        .layout { display: flex; min-height: calc(100vh - 48px); }
+
+        .main { flex: 1; padding: 24px; display: flex; gap: 20px; }
+        .panel { background: white; border: 1px solid #e5e5e5; padding: 20px; }
+        .panel-left { flex: 1.2; min-width: 0; }
+        .panel-right { flex: 1; min-width: 0; }
+
+        h1 { font-size: 20px; margin: 0 0 16px 0; font-weight: 600; }
+        h2 { font-size: 16px; margin: 0 0 16px 0; font-weight: 600; }
+        h2 .num { color: #c8102e; margin-left: 10px; }
+
+        .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+        .toolbar label { font-size: 13px; }
+        input[type=text], input[type=number], input[type=datetime-local] {
+            border: 1px solid #ccc;
+            padding: 5px 8px;
+            font-size: 13px;
+            border-radius: 2px;
+            font-family: inherit;
+        }
+        input:focus { outline: none; border-color: #c8102e; }
+
+        .btn {
+            background: #c8102e;
+            color: white;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 2px;
+            cursor: pointer;
+            font-size: 13px;
+            font-family: inherit;
+        }
+        .btn:hover { background: #a30d25; }
+        .btn:disabled { background: #d9a4ac; cursor: not-allowed; }
+        .btn-link {
+            background: none;
+            color: #c8102e;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            padding: 0;
+            text-decoration: underline;
+        }
+        .btn-icon {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 2px 4px;
+            color: #555;
+            font-size: 14px;
+        }
+        .btn-icon:hover { color: #c8102e; }
+        .btn-icon:disabled { color: #ccc; cursor: not-allowed; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th {
+            background: #f5f5f5;
+            text-align: left;
+            padding: 8px;
+            font-weight: 600;
+            border: 1px solid #e0e0e0;
+            font-size: 11px;
+        }
+        td { padding: 6px 8px; border: 1px solid #e0e0e0; }
+        tr.selected td { background: #fef0f2; }
+        tr.editing td { background: #fff8dc; }
+        tr:not(.editing):not(.selected):hover td { background: #fafafa; cursor: pointer; }
+
+        td input {
+            width: 100%;
+            min-width: 90px;
+            border: 1px solid #c8102e;
+            padding: 6px 8px;
+            font-size: 13px;
+            font-family: inherit;
+        }
+        td input[type=number] { min-width: 80px; }
+        .check { color: #2e7d32; font-weight: bold; }
+        .actions-cell { white-space: nowrap; text-align: center; width: 70px; }
+
+        .modal-backdrop {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.4);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 100;
+        }
+        .modal {
+            background: white; padding: 24px;
+            border-radius: 4px; min-width: 400px; max-width: 90vw;
+        }
+        .modal h3 { margin: 0 0 16px 0; }
+        .form-row { margin-bottom: 12px; }
+        .form-row label { display: block; margin-bottom: 4px; font-size: 12px; color: #555; }
+        .form-row input, .form-row textarea {
+            width: 100%;
+            border: 1px solid #ccc;
+            padding: 6px 8px;
+            font-size: 13px;
+            font-family: inherit;
+        }
+        .form-row textarea { resize: vertical; min-height: 60px; }
+        .form-row .required::after { content: " *"; color: #c8102e; }
+        .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+        .btn-secondary {
+            background: white; color: #555; border: 1px solid #ccc;
+        }
+        .btn-secondary:hover { background: #f5f5f5; }
+
+        .error-msg {
+            background: #fde7ea; color: #a30d25; padding: 6px 10px;
+            border-radius: 2px; margin-bottom: 12px; font-size: 12px;
+        }
+        .empty { text-align: center; padding: 24px; color: #999; font-size: 12px; }
+        .loading { text-align: center; padding: 24px; color: #999; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="header">
+        <span class="profile-name" v-if="currentUser">{{ currentUser }}</span>
+        <button class="profile-btn" @click="openUserModal">Профиль</button>
+    </div>
+
+    <div class="layout">
+        <main class="main">
+            <section class="panel panel-left">
+                <h1>Справочник погрузчиков</h1>
+
+                <div class="toolbar">
+                    <label>Номер погрузчика</label>
+                    <input type="text" v-model="searchQuery" @keyup.enter="search">
+                    <button class="btn" @click="search">🔍 Искать</button>
+                    <button class="btn-link" @click="resetFilter">✕ Сбросить фильтр</button>
+                </div>
+
+                <div class="toolbar">
+                    <button class="btn" @click="addForklift" :disabled="hasUnsavedRow">Добавить</button>
+                </div>
+
+                <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:50px">Код</th>
+                            <th>Марка</th>
+                            <th>Номер</th>
+                            <th>Грузо&shy;подъем&shy;ность</th>
+                            <th style="width:70px">Активен</th>
+                            <th style="width:140px">Время и Дата изменения</th>
+                            <th>Пользователь</th>
+                            <th class="actions-cell">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-if="loadingForklifts"><td colspan="8" class="loading">Загрузка...</td></tr>
+                        <tr v-else-if="forklifts.length === 0"><td colspan="8" class="empty">Нет данных</td></tr>
+                        <tr v-for="f in forklifts" :key="f.id"
+                            :class="{ selected: selectedId === f.id, editing: editingId === f.id }"
+                            @click="selectForklift(f)">
+
+                            <td>{{ f.id || '' }}</td>
+
+                            <template v-if="editingId === f.id">
+                                <td><input v-model="editBuffer.brand"></td>
+                                <td><input v-model="editBuffer.number"></td>
+                                <td><input type="number" step="0.001" v-model.number="editBuffer.capacity"></td>
+                                <td style="text-align:center">
+                                    <input type="checkbox" v-model="editBuffer.active">
+                                </td>
+                                <td>{{ formatDateTime(f.updatedAt) }}</td>
+                                <td>{{ f.username || '' }}</td>
+                                <td class="actions-cell">
+                                    <button class="btn-icon" @click.stop="saveForklift" title="Сохранить">✓</button>
+                                    <button class="btn-icon" @click.stop="cancelEdit" title="Отменить">✕</button>
+                                </td>
+                            </template>
+
+                            <template v-else>
+                                <td>{{ f.brand }}</td>
+                                <td>{{ f.number }}</td>
+                                <td>{{ f.capacity }}</td>
+                                <td style="text-align:center"><span v-if="f.active" class="check">✓</span></td>
+                                <td>{{ formatDateTime(f.updatedAt) }}</td>
+                                <td>{{ f.username }}</td>
+                                <td class="actions-cell">
+                                    <button class="btn-icon" @click.stop="editForklift(f)" :disabled="!!editingId" title="Изменить">✎</button>
+                                    <button class="btn-icon" @click.stop="deleteForklift(f)" :disabled="!!editingId" title="Удалить">✕</button>
+                                </td>
+                            </template>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="panel panel-right">
+                <h2>
+                    Простои по погрузчику
+                    <span class="num" v-if="selectedForklift">{{ selectedForklift.number }}</span>
+                </h2>
+
+                <div class="toolbar">
+                    <button class="btn" @click="openIncidentModal(null)" :disabled="!selectedId">Добавить</button>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:50px">Код записи</th>
+                            <th>Начало</th>
+                            <th>Окончание</th>
+                            <th style="width:80px">Время простоя</th>
+                            <th>Причина</th>
+                            <th class="actions-cell">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-if="!selectedId"><td colspan="6" class="empty">Выберите погрузчик</td></tr>
+                        <tr v-else-if="loadingIncidents"><td colspan="6" class="loading">Загрузка...</td></tr>
+                        <tr v-else-if="incidents.length === 0"><td colspan="6" class="empty">Нет простоев</td></tr>
+                        <tr v-for="(inc, idx) in incidents" :key="inc.id">
+                            <td>{{ idx + 1 }}</td>
+                            <td>{{ formatDateTime(inc.startTime) }}</td>
+                            <td>{{ formatDateTime(inc.endTime) }}</td>
+                            <td>{{ inc.downtime }}</td>
+                            <td>{{ inc.description }}</td>
+                            <td class="actions-cell">
+                                <button class="btn-icon" @click="openIncidentModal(inc)" title="Изменить">✎</button>
+                                <button class="btn-icon" @click="deleteIncident(inc)" title="Удалить">✕</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+        </main>
+    </div>
+
+    <div v-if="incidentModal.open" class="modal-backdrop" @click.self="closeIncidentModal">
+        <div class="modal">
+            <h3>{{ incidentModal.editing ? 'Изменить простой' : 'Новый простой' }}</h3>
+            <div v-if="incidentModal.error" class="error-msg">{{ incidentModal.error }}</div>
+
+            <div class="form-row">
+                <label class="required">Дата и время начала</label>
+                <input type="datetime-local" v-model="incidentModal.data.startTime">
+            </div>
+            <div class="form-row">
+                <label>Дата и время окончания</label>
+                <input type="datetime-local" v-model="incidentModal.data.endTime">
+            </div>
+            <div class="form-row">
+                <label>Описание проблемы</label>
+                <textarea v-model="incidentModal.data.description"></textarea>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-secondary" @click="closeIncidentModal">Отмена</button>
+                <button class="btn" @click="saveIncident">Сохранить</button>
+            </div>
+        </div>
+    </div>
+    <div v-if="userModal.open" class="modal-backdrop">
+        <div class="modal">
+            <h3>{{ userModal.firstTime ? 'Представьтесь' : 'Сменить пользователя' }}</h3>
+            <div v-if="userModal.error" class="error-msg">{{ userModal.error }}</div>
+            <div class="form-row">
+                <label class="required">ФИО пользователя</label>
+                <input type="text" v-model="userModal.value"
+                       @keyup.enter="saveUser" placeholder="Иванов И.И."
+                       ref="userInput" autofocus>
+            </div>
+            <div class="modal-actions">
+                <button v-if="!userModal.firstTime" class="btn btn-secondary" @click="closeUserModal">Отмена</button>
+                <button class="btn" @click="saveUser">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+const { createApp, ref, computed, onMounted } = Vue;
+
+const API = '/api';
+
+createApp({
+    setup() {
+        const currentUser = ref(localStorage.getItem('username') || '');
+        const userModal = ref({
+            open: !currentUser.value,
+            firstTime: !currentUser.value,
+            value: '',
+            error: ''
+        });
+
+        const forklifts = ref([]);
+        const incidents = ref([]);
+        const selectedId = ref(null);
+        const editingId = ref(null);
+        const editBuffer = ref({});
+        const searchQuery = ref('');
+        const errorMsg = ref('');
+        const loadingForklifts = ref(false);
+        const loadingIncidents = ref(false);
+
+        const incidentModal = ref({
+            open: false,
+            editing: null,
+            error: '',
+            data: { startTime: '', endTime: '', description: '' }
+        });
+
+        const hasUnsavedRow = computed(() => forklifts.value.some(f => f.id === 'new'));
+        const selectedForklift = computed(() => forklifts.value.find(f => f.id === selectedId.value));
+
+        function formatDateTime(iso) {
+            if (!iso) return '';
+            const d = new Date(iso);
+            const pad = n => String(n).padStart(2, '0');
+            return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+
+        function formatDuration(startIso, endIso) {
+            if (!startIso) return '';
+            const start = new Date(startIso);
+            const end = endIso ? new Date(endIso) : new Date();
+            const diffMin = Math.floor((end - start) / 60000);
+            if (diffMin < 0) return '';
+            const h = Math.floor(diffMin / 60);
+            const m = diffMin % 60;
+            return `${h}ч ${m} мин`;
+        }
+
+        function isoToLocal(iso) {
+            if (!iso) return '';
+            const d = new Date(iso);
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+        function localToIso(local) {
+            if (!local) return null;
+            return local.length === 16 ? local + ':00' : local;
+        }
+
+        async function api(method, url, body) {
+            const opts = {
+                method,
+                headers: { 'Content-Type': 'application/json' }
+            };
+            if (body !== undefined) opts.body = JSON.stringify(body);
+            const r = await fetch(API + url, opts);
+            if (!r.ok) {
+                let msg = `Ошибка ${r.status}`;
+                try {
+                    const err = await r.json();
+                    if (err.message) msg = err.message;
+                } catch (_) {}
+                throw new Error(msg);
+            }
+            if (r.status === 204) return null;
+            return r.json();
+        }
+
+        function openUserModal() {
+            userModal.value = {
+                open: true,
+                firstTime: false,
+                value: currentUser.value || '',
+                error: ''
+            };
+        }
+        function closeUserModal() {
+            if (userModal.value.firstTime) return;
+            userModal.value.open = false;
+        }
+        function saveUser() {
+            const v = (userModal.value.value || '').trim();
+            if (!v) { userModal.value.error = 'Введите ФИО'; return; }
+            const wasFirstTime = userModal.value.firstTime;
+            currentUser.value = v;
+            localStorage.setItem('username', v);
+            userModal.value.open = false;
+            userModal.value.firstTime = false;
+            if (wasFirstTime) loadForklifts();
+        }
+
+        async function loadForklifts() {
+            loadingForklifts.value = true;
+            errorMsg.value = '';
+            try {
+                const q = searchQuery.value ? `?number=${encodeURIComponent(searchQuery.value)}` : '';
+                forklifts.value = await api('GET', '/forklifts' + q);
+            } catch (e) {
+                errorMsg.value = e.message;
+            } finally {
+                loadingForklifts.value = false;
+            }
+        }
+
+        function search() { loadForklifts(); }
+        function resetFilter() { searchQuery.value = ''; loadForklifts(); }
+
+        function selectForklift(f) {
+            if (editingId.value || f.id === 'new') return;
+            selectedId.value = f.id;
+            loadIncidents();
+        }
+
+        function addForklift() {
+            if (hasUnsavedRow.value) return;
+            const newRow = { id: 'new', brand: '', number: '', capacity: null, active: true, updatedAt: null, updatedBy: null };
+            forklifts.value.unshift(newRow);
+            editingId.value = 'new';
+            editBuffer.value = { brand: '', number: '', capacity: null, active: true };
+        }
+
+        function editForklift(f) {
+            if (editingId.value) return;
+            selectedId.value = f.id;
+            editingId.value = f.id;
+            editBuffer.value = { brand: f.brand, number: f.number, capacity: f.capacity, active: f.active };
+        }
+
+        async function saveForklift() {
+            errorMsg.value = '';
+            if (!editBuffer.value.brand || !editBuffer.value.number) {
+                errorMsg.value = 'Заполните марку и номер';
+                return;
+            }
+            const payload = { ...editBuffer.value, username: currentUser.value };
+            try {
+                if (editingId.value === 'new') {
+                    await api('POST', '/forklifts', payload);
+                } else {
+                    await api('PUT', `/forklifts/${editingId.value}`, payload);
+                }
+                editingId.value = null;
+                await loadForklifts();
+            } catch (e) {
+                errorMsg.value = e.message;
+            }
+        }
+
+        function cancelEdit() {
+            if (!confirm('Не сохранять внесенные изменения? Вы уверены?')) return;
+            if (editingId.value === 'new') {
+                forklifts.value = forklifts.value.filter(f => f.id !== 'new');
+            }
+            editingId.value = null;
+            errorMsg.value = '';
+        }
+
+        async function deleteForklift(f) {
+            if (!confirm('Удалить погрузчик? Вы уверены?')) return;
+            errorMsg.value = '';
+            try {
+                await api('DELETE', `/forklifts/${f.id}`);
+                if (selectedId.value === f.id) {
+                    selectedId.value = null;
+                    incidents.value = [];
+                }
+                await loadForklifts();
+            } catch (e) {
+                errorMsg.value = e.message;
+            }
+        }
+
+        async function loadIncidents() {
+            if (!selectedId.value) { incidents.value = []; return; }
+            loadingIncidents.value = true;
+            try {
+                incidents.value = await api('GET', `/forklifts/${selectedId.value}/incidents`);
+            } catch (e) {
+                errorMsg.value = e.message;
+            } finally {
+                loadingIncidents.value = false;
+            }
+        }
+
+        function openIncidentModal(inc) {
+            if (inc) {
+                incidentModal.value = {
+                    open: true,
+                    editing: inc.id,
+                    error: '',
+                    data: {
+                        startTime: isoToLocal(inc.startTime),
+                        endTime: isoToLocal(inc.endTime),
+                        description: inc.description || ''
+                    }
+                };
+            } else {
+                incidentModal.value = {
+                    open: true,
+                    editing: null,
+                    error: '',
+                    data: {
+                        startTime: isoToLocal(new Date().toISOString()),
+                        endTime: '',
+                        description: ''
+                    }
+                };
+            }
+        }
+
+        function closeIncidentModal() {
+            incidentModal.value.open = false;
+        }
+
+        async function saveIncident() {
+            const m = incidentModal.value;
+            if (!m.data.startTime) { m.error = 'Дата начала обязательна'; return; }
+            const payload = {
+                startTime: localToIso(m.data.startTime),
+                endTime: m.data.endTime ? localToIso(m.data.endTime) : null,
+                description: m.data.description
+            };
+            try {
+                if (m.editing) {
+                    await api('PUT', `/incidents/${m.editing}`, payload);
+                } else {
+                    await api('POST', `/forklifts/${selectedId.value}/incidents`, payload);
+                }
+                closeIncidentModal();
+                await loadIncidents();
+                await loadForklifts();
+            } catch (e) {
+                m.error = e.message;
+            }
+        }
+
+        async function deleteIncident(inc) {
+            if (!confirm('Удалить информацию о простое? Вы уверены?')) return;
+            try {
+                await api('DELETE', `/incidents/${inc.id}`);
+                await loadIncidents();
+            } catch (e) {
+                errorMsg.value = e.message;
+            }
+        }
+
+        onMounted(() => {
+            if (currentUser.value) loadForklifts();
+        });
+
+        return {
+            currentUser, userModal,
+            forklifts, incidents, selectedId, editingId, editBuffer,
+            searchQuery, errorMsg, loadingForklifts, loadingIncidents,
+            incidentModal, hasUnsavedRow, selectedForklift,
+            formatDateTime, formatDuration,
+            openUserModal, closeUserModal, saveUser,
+            search, resetFilter, selectForklift, addForklift, editForklift,
+            saveForklift, cancelEdit, deleteForklift,
+            openIncidentModal, closeIncidentModal, saveIncident, deleteIncident
+        };
+    }
+}).mount('#app');
+</script>
+</body>
+</html>
